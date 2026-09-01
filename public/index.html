@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORBIT</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- AUTH SCREEN -->
+  <div id="auth-screen" class="card">
+    <h1>Welcome to ORBIT</h1>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <div class="btn-group">
+      <button onclick="login()">Log In</button>
+      <button onclick="register()">Register</button>
+    </div>
+    <p id="auth-error" class="error"></p>
+  </div>
+
+  <!-- MAIN APP SCREEN -->
+  <div id="app-screen" class="hidden">
+    <header>
+      <h2>ORBIT Workspace</h2>
+      <span id="user-display"></span>
+      <button id="admin-btn" class="hidden" onclick="toggleAdminPanel()">Admin Panel</button>
+      <button onclick="logout()">Logout</button>
+    </header>
+
+    <div class="main-content">
+      <!-- CHAT MODULE -->
+      <section id="chat-module" class="panel">
+        <h3>Live Chat</h3>
+        <div id="chat-box"></div>
+        <div class="input-group">
+          <input type="text" id="message-input" placeholder="Type a message...">
+          <button onclick="sendMessage()">Send</button>
+        </div>
+      </section>
+
+      <!-- ADMIN PANEL -->
+      <section id="admin-panel" class="panel hidden">
+        <h3>Admin Controls</h3>
+        <button onclick="clearChat()">Clear Chat</button>
+        <h4>User Management</h4>
+        <div id="user-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
