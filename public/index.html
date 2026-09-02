@@ -7,43 +7,61 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
   <!-- AUTH SCREEN -->
   <div id="auth-screen" class="card">
-    <h1>Welcome to ORBIT</h1>
-    <input type="text" id="username" placeholder="Username">
+    <h1 class="glow-title">ORBIT</h1>
+    <p class="subtitle">Enter the Grid</p>
+    
+    <input type="text" id="username" placeholder="Username" autocomplete="off">
     <input type="password" id="password" placeholder="Password">
+    
     <div class="btn-group">
       <button onclick="login()">Log In</button>
-      <button onclick="register()">Register</button>
+      <button onclick="register()" class="btn-outline">Register</button>
     </div>
-    <p id="auth-error" class="error"></p>
+    <p id="auth-error" class="error-msg"></p>
   </div>
 
   <!-- MAIN APP SCREEN -->
   <div id="app-screen" class="hidden">
-    <header>
-      <h2>ORBIT Workspace</h2>
-      <span id="user-display"></span>
-      <button id="admin-btn" class="hidden" onclick="toggleAdminPanel()">Admin Panel</button>
-      <button onclick="logout()">Logout</button>
+    <header class="navbar">
+      <h2 class="glow-logo">ORBIT</h2>
+      <div class="user-info">
+        <span id="user-display"></span>
+        <button id="admin-btn" class="hidden btn-admin" onclick="toggleAdminPanel()">Admin Dashboard</button>
+        <button onclick="logout()" class="btn-secondary">Logout</button>
+      </div>
     </header>
 
-    <div class="main-content">
-      <!-- CHAT MODULE -->
-      <section id="chat-module" class="panel">
-        <h3>Live Chat</h3>
+    <div class="app-layout">
+      <!-- LIVE CHAT PANEL -->
+      <section class="panel chat-panel">
+        <h3>Live Transmissions</h3>
         <div id="chat-box"></div>
         <div class="input-group">
-          <input type="text" id="message-input" placeholder="Type a message...">
+          <input type="text" id="message-input" placeholder="Broadcast a message..." onkeypress="handleKeyPress(event)">
           <button onclick="sendMessage()">Send</button>
         </div>
       </section>
 
-      <!-- ADMIN PANEL -->
-      <section id="admin-panel" class="panel hidden">
-        <h3>Admin Controls</h3>
-        <button onclick="clearChat()">Clear Chat</button>
-        <h4>User Management</h4>
+      <!-- TASK MANAGER PANEL -->
+      <section class="panel task-panel">
+        <h3>Tasks & Directives</h3>
+        <div class="input-group">
+          <input type="text" id="task-input" placeholder="New task item...">
+          <button onclick="addTask()">Add</button>
+        </div>
+        <ul id="task-list"></ul>
+      </section>
+
+      <!-- ADMIN CONTROL PANEL -->
+      <section id="admin-panel" class="panel admin-panel hidden">
+        <h3 class="admin-title">Overwatch Control</h3>
+        <div class="admin-actions">
+          <button onclick="clearChat()" class="btn-danger">Purge Chat History</button>
+        </div>
+        <h4>Registered Identities</h4>
         <div id="user-list"></div>
       </section>
     </div>
