@@ -3,6 +3,17 @@ let currentUser = null;
 let currentChannel = 'general';
 let cursorTrailActive = true;
 let clockFormat = '12';
+let croppedAvatarData = null;
+
+// HOTKEYS (ESC TO CLOSE MODALS)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    toggleProfileModal(false);
+    toggleAdminModal(false);
+    toggleCropModal(false);
+    toggleHotkeyModal(false);
+  }
+});
 
 // CURSOR TRAIL
 document.addEventListener('mousemove', (e) => {
@@ -13,6 +24,34 @@ document.addEventListener('mousemove', (e) => {
   particle.style.top = `${e.pageY}px`;
   document.body.appendChild(particle);
   setTimeout(() => particle.remove(), 500);
+});
+
+// LOAD PERSISTED SETTINGS FROM LOCALSTORAGE
+window.addEventListener('DOMContentLoaded', () => {
+  const savedTheme = localStorage.getItem('orbit_theme') || 'purple';
+  const savedBg = localStorage.getItem('orbit_bg') || 'bg-grid';
+  const savedGlass = localStorage.getItem('orbit_glass') !== 'false';
+  const savedTrail = localStorage.getItem('orbit_trail') !== 'false';
+  const savedClockFont = localStorage.getItem('orbit_clock_font') || 'font-win11';
+  const savedClockFmt = localStorage.getItem('orbit_clock_fmt') || '12';
+  const savedSidebarPos = localStorage.getItem('orbit_sidebar_pos') || 'left';
+  const savedEngine = localStorage.getItem('orbit_search_engine') || 'google';
+
+  changeTheme(savedTheme, false);
+  changeWallpaper(savedBg, false);
+  if (!savedGlass) document.body.classList.remove('liquid-glass');
+  cursorTrailActive = savedTrail;
+  clockFormat = savedClockFmt;
+
+  document.getElementById('theme-select').value = savedTheme;
+  document.getElementById('wallpaper-select').value = savedBg;
+  document.getElementById('clock-font-select').value = savedClockFont;
+  document.getElementById('clock-format-select').value = savedClockFmt;
+  document.getElementById('sidebar-pos-select').value = savedSidebarPos;
+  document.getElementById('search-engine-select').value = savedEngine;
+  
+  changeClockFont(savedClockFont);
+  changeSidebarPosition(savedSidebarPos);
 });
 
 // PING METER
@@ -40,12 +79,13 @@ function handleSearch(e) { if (e.key === 'Enter') executeSearch(); }
 function executeSearch() {
   const query = encodeURIComponent(document.getElementById('global-search').value.trim());
   if (!query) return;
-  const engine = document.getElementById('search-engine-select').value;
+  const engine = localStorage.getItem('orbit_search_engine') || 'google';
   let url = `https://www.google.com/search?q=${query}`;
   if (engine === 'bing') url = `https://www.bing.com/search?q=${query}`;
   if (engine === 'duckduckgo') url = `https://duckduckgo.com/?q=${query}`;
   window.open(url, '_blank');
 }
+function saveSearchEngine(val) { localStorage.setItem('orbit_search_engine', val); }
 
 // AUTH
 async function register() {
@@ -104,10 +144,51 @@ function startWin11Clock() {
 }
 
 function changeClockFont(fontClass) {
-  const clock = document.getElementById('win11-clock');
-  clock.className = `win11-clock ${fontClass}`;
+  document.getElementById('win11-clock').className = `win11-clock ${fontClass}`;
+  localStorage.setItem('orbit_clock_font', fontClass);
 }
-function changeClockFormat(fmt) { clockFormat = fmt; }
+function changeClockFormat(fmt) {
+  clockFormat = fmt;
+  localStorage.setItem('orbit_clock_fmt', fmt);
+}
+
+// AVATAR CROPPER
+function handleAvatarSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('crop-image-target').src = e.target.result;
+    toggleCropModal(true);
+  };
+  reader.readAsDataURL(file);
+}
+
+function adjustCropZoom(val) {
+  document.getElementById('crop-image-target').style.transform = `scale(${val})`;
+}
+
+function saveCroppedAvatar() {
+  croppedAvatarData = document.getElementById('crop-image-target').src;
+  document.getElementById('topbar-avatar').src = croppedAvatarData;
+  document.getElementById('prof-avatar').src = croppedAvatarData;
+  toggleCropModal(false);
+  alert("Profile picture updated!");
+}
+
+function toggleCropModal(show) {
+  const modal = document.getElementById('crop-modal');
+  if (show) modal.classList.remove('hidden');
+  else modal.classList.add('hidden');
+}
+function closeCropModal(e) { if (e.target.id === 'crop-modal') toggleCropModal(false); }
+
+function toggleHotkeyModal(show) {
+  const modal = document.getElementById('hotkey-modal');
+  if (show) modal.classList.remove('hidden');
+  else modal.classList.add('hidden');
+}
+function closeHotkeyModal(e) { if (e.target.id === 'hotkey-modal') toggleHotkeyModal(false); }
 
 // CHAT & PROFILES
 function sendMessage() {
@@ -127,7 +208,6 @@ socket.on('newMessage', (msg) => {
   box.scrollTop = box.scrollHeight;
 });
 
-// DISCORD-STYLE PROFILE MODAL
 function openSelfProfile() { if (currentUser) openUserProfile(currentUser.username); }
 function openUserProfile(username) {
   document.getElementById('prof-username').innerText = username;
@@ -176,32 +256,37 @@ function triggerNewsRefresh() {
   alert("Gaming News refreshed across the system.");
 }
 
-// SETTINGS & APPEARANCE
-function changeTheme(theme) {
+// PERSISTENT SETTINGS TOGGLES
+function changeTheme(theme, save = true) {
   document.body.className = document.body.className.replace(/theme-\w+/g, `theme-${theme}`);
+  if (save) localStorage.setItem('orbit_theme', theme);
 }
-function changeWallpaper(bg) {
+function changeWallpaper(bg, save = true) {
   document.body.className = document.body.className.replace(/bg-\w+/g, bg);
+  if (save) localStorage.setItem('orbit_bg', bg);
 }
 function overrideGlobalWallpaper(bg) {
   changeWallpaper(bg);
   alert("Global wallpaper overridden by Admin.");
 }
-function toggleLiquidGlass() { document.body.classList.toggle('liquid-glass'); }
-function toggleCursorTrail() { cursorTrailActive = !cursorTrailActive; }
+function toggleLiquidGlass() { 
+  document.body.classList.toggle('liquid-glass');
+  localStorage.setItem('orbit_glass', document.body.classList.contains('liquid-glass'));
+}
+function toggleCursorTrail() { 
+  cursorTrailActive = !cursorTrailActive;
+  localStorage.setItem('orbit_trail', cursorTrailActive);
+}
 function changeSidebarPosition(pos) {
   const container = document.getElementById('hub-container');
   if (pos === 'right') container.classList.add('layout-right');
   else container.classList.remove('layout-right');
+  localStorage.setItem('orbit_sidebar_pos', pos);
 }
 
 function toggleGamingMode() {
   const badge = document.getElementById('gaming-indicator');
   badge.classList.toggle('hidden');
-}
-
-function saveProfileSettings() {
-  // Saved internally for profile card renders
 }
 
 function unlockStash() {

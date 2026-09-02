@@ -8,10 +8,34 @@
 </head>
 <body class="theme-purple liquid-glass bg-grid">
 
-  <!-- DYNAMIC CURSOR TRAIL CONTAINER -->
   <div id="cursor-trail-container"></div>
 
-  <!-- USER PROFILE MODAL (DISCORD STYLE) -->
+  <div id="crop-modal" class="modal-overlay hidden" onclick="closeCropModal(event)">
+    <div class="crop-card" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="toggleCropModal(false)">×</button>
+      <h3>Crop Profile Picture</h3>
+      <div class="crop-preview-container">
+        <img id="crop-image-target" src="" alt="Crop Preview">
+      </div>
+      <div class="crop-controls">
+        <label>Zoom Level</label>
+        <input type="range" id="crop-zoom" min="1" max="3" step="0.1" value="1" oninput="adjustCropZoom(this.value)">
+        <button onclick="saveCroppedAvatar()" class="btn-admin">Apply & Save Avatar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="hotkey-modal" class="modal-overlay hidden" onclick="closeHotkeyModal(event)">
+    <div class="profile-card" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="toggleHotkeyModal(false)">×</button>
+      <h3>System Hotkey Guide</h3>
+      <div class="tag-row" style="margin-top: 15px;"><span>Close Modals:</span> <strong>ESC</strong></div>
+      <div class="tag-row"><span>Send Chat Message:</span> <strong>ENTER</strong></div>
+      <div class="tag-row"><span>Execute Web Search:</span> <strong>ENTER</strong></div>
+      <div class="tag-row"><span>Quick Home Tab:</span> <strong>ALT + H</strong></div>
+    </div>
+  </div>
+
   <div id="profile-modal" class="modal-overlay hidden" onclick="closeProfileModal(event)">
     <div class="profile-card" onclick="event.stopPropagation()">
       <button class="modal-close" onclick="toggleProfileModal(false)">×</button>
@@ -34,7 +58,6 @@
     </div>
   </div>
 
-  <!-- HIDDEN ADMIN OVERWATCH MODAL -->
   <div id="admin-modal" class="modal-overlay hidden" onclick="closeAdminModal(event)">
     <div class="admin-card" onclick="event.stopPropagation()">
       <button class="modal-close" onclick="toggleAdminModal(false)">×</button>
@@ -57,7 +80,6 @@
     </div>
   </div>
 
-  <!-- AUTH / LANDING SCREEN -->
   <div id="auth-screen" class="auth-card">
     <h1 class="hero-title">ORBIT</h1>
     <p class="subtitle">Centralized Operating Hub</p>
@@ -74,10 +96,8 @@
     </div>
   </div>
 
-  <!-- MAIN APP SCREEN -->
   <div id="app-screen" class="hidden">
     
-    <!-- PERSISTENT TOP BAR -->
     <header class="top-bar">
       <div class="top-bar-left">
         <span class="brand-logo" onclick="switchTab('home')">ORBIT</span>
@@ -93,6 +113,7 @@
           <span id="ping-value">0 ms</span>
         </div>
         <div class="user-badge" onclick="openSelfProfile()" style="cursor: pointer;">
+          <img id="topbar-avatar" src="https://via.placeholder.com/32/0f081d/a855f7?text=U" class="topbar-avatar-img">
           <span id="user-display">User</span>
           <span id="gaming-indicator" class="badge hidden">GAMING</span>
         </div>
@@ -100,10 +121,8 @@
       </div>
     </header>
 
-    <!-- APP BODY -->
     <div id="hub-container" class="hub-container layout-left">
       
-      <!-- SIDEBAR -->
       <nav id="app-sidebar" class="sidebar">
         <button class="nav-btn active" onclick="switchTab('home')">🏠 Home</button>
         <button class="nav-btn" onclick="switchTab('news')">📰 Gaming News</button>
@@ -114,10 +133,8 @@
         <button class="nav-btn" onclick="switchTab('settings')">⚙️ Settings</button>
       </nav>
 
-      <!-- VIEWPORTS -->
       <main class="content-area">
         
-        <!-- HOME TAB (CENTERED BRANDING + WIN11 CLOCK) -->
         <section id="tab-home" class="tab-viewport home-viewport">
           <div class="home-center-content">
             <h1 class="orbit-center-title">ORBIT</h1>
@@ -125,13 +142,11 @@
           </div>
         </section>
 
-        <!-- GAMING NEWS TAB -->
         <section id="tab-news" class="tab-viewport hidden">
           <h2>Gaming Headlines</h2>
           <div id="news-grid" class="news-grid"></div>
         </section>
 
-        <!-- MUSIC TAB -->
         <section id="tab-music" class="tab-viewport hidden">
           <h2>Spotify Media Hub</h2>
           <div class="spotify-container">
@@ -139,7 +154,6 @@
           </div>
         </section>
 
-        <!-- CHATS TAB -->
         <section id="tab-chats" class="tab-viewport hidden">
           <div class="chat-layout">
             <div class="chat-sidebar">
@@ -160,7 +174,6 @@
           </div>
         </section>
 
-        <!-- TASKS & CALENDAR TAB -->
         <section id="tab-tasks" class="tab-viewport hidden">
           <h2>Task Directives</h2>
           <div class="task-controls">
@@ -175,7 +188,6 @@
           <ul id="task-list"></ul>
         </section>
 
-        <!-- FILE VAULT TAB -->
         <section id="tab-vault" class="tab-viewport hidden">
           <h2>File Vault</h2>
           <div class="vault-grid">
@@ -196,21 +208,27 @@
           </div>
         </section>
 
-        <!-- SETTINGS TAB (EXPANDED) -->
         <section id="tab-settings" class="tab-viewport hidden">
           <div class="settings-header">
             <h2>System Settings</h2>
-            <button id="admin-trigger-btn" class="btn-admin hidden" onclick="toggleAdminModal(true)">Admin Overwatch</button>
+            <div style="display: flex; gap: 10px;">
+              <button onclick="toggleHotkeyModal(true)" class="btn-secondary">⌨️ Hotkeys</button>
+              <button id="admin-trigger-btn" class="btn-admin hidden" onclick="toggleAdminModal(true)">Admin Overwatch</button>
+            </div>
           </div>
 
           <div class="settings-grid">
-            <!-- Profile & Status -->
             <div class="settings-card">
               <h3>Profile & Handles</h3>
+              <label>Profile Avatar</label>
+              <input type="file" id="avatar-input" accept="image/*" onchange="handleAvatarSelect(event)">
+              
               <label>Status Message</label>
               <input type="text" id="set-status" placeholder="e.g. In the Zone" onchange="saveProfileSettings()">
-              <label>Gaming Mode Toggle</label>
+              
+              <label>Rich Presence</label>
               <button onclick="toggleGamingMode()">Toggle "GAMING" Status</button>
+
               <label>Steam ID</label>
               <input type="text" id="set-steam" placeholder="Steam Username" onchange="saveProfileSettings()">
               <label>Xbox Gamertag</label>
@@ -223,7 +241,6 @@
               <input type="text" id="set-epic" placeholder="Epic Username" onchange="saveProfileSettings()">
             </div>
 
-            <!-- Appearance & Customization -->
             <div class="settings-card">
               <h3>Visual Style</h3>
               <label>Theme Accent</label>
@@ -245,28 +262,27 @@
               <label>Cursor Trail</label>
               <button onclick="toggleCursorTrail()">Toggle Cursor Particles</button>
               <label>Sidebar Position</label>
-              <select onchange="changeSidebarPosition(this.value)">
+              <select id="sidebar-pos-select" onchange="changeSidebarPosition(this.value)">
                 <option value="left">Left Side</option>
                 <option value="right">Right Side</option>
               </select>
             </div>
 
-            <!-- Clock & Search -->
             <div class="settings-card">
               <h3>Clock & System</h3>
               <label>Homepage Clock Font</label>
-              <select onchange="changeClockFont(this.value)">
+              <select id="clock-font-select" onchange="changeClockFont(this.value)">
                 <option value="font-win11">Windows 11 Minimal</option>
                 <option value="font-cyber">Cyberpunk Digital</option>
                 <option value="font-arcade">Retro Arcade</option>
               </select>
               <label>Clock Time Format</label>
-              <select onchange="changeClockFormat(this.value)">
+              <select id="clock-format-select" onchange="changeClockFormat(this.value)">
                 <option value="12">12-Hour (AM/PM)</option>
                 <option value="24">24-Hour Format</option>
               </select>
               <label>Default Search Engine</label>
-              <select id="search-engine-select">
+              <select id="search-engine-select" onchange="saveSearchEngine(this.value)">
                 <option value="google">Google</option>
                 <option value="bing">Bing</option>
                 <option value="duckduckgo">DuckDuckGo</option>
