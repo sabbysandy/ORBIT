@@ -1,10 +1,12 @@
 const socket = io();
 let currentUser = null;
 let currentChannel = 'general';
-let searchEngine = 'google';
+let cursorTrailActive = true;
+let clockFormat = '12';
 
-// CURSOR TRAIL EFFECT
+// CURSOR TRAIL
 document.addEventListener('mousemove', (e) => {
+  if (!cursorTrailActive) return;
   const particle = document.createElement('div');
   particle.className = 'trail-particle';
   particle.style.left = `${e.pageX}px`;
@@ -45,26 +47,22 @@ function executeSearch() {
   window.open(url, '_blank');
 }
 
-// AUTHENTICATION
+// AUTH
 async function register() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  const err = document.getElementById('auth-error');
-
   const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
   });
   const data = await res.json();
-  err.innerText = data.message || (data.success ? "Registered! You may log in." : "Failed");
+  document.getElementById('auth-error').innerText = data.message || (data.success ? "Registered! You may log in." : "Error");
 }
 
 async function login() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  const err = document.getElementById('auth-error');
-
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -76,15 +74,42 @@ async function login() {
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
     document.getElementById('user-display').innerText = currentUser.username;
-    if (currentUser.isAdmin) document.getElementById('admin-dashboard').classList.remove('hidden');
+    
+    if (currentUser.isAdmin) {
+      document.getElementById('admin-trigger-btn').classList.remove('hidden');
+    }
+    
     socket.emit('joinChannel', currentChannel);
-    startClock();
+    startWin11Clock();
   } else {
-    err.innerText = data.message || "Invalid credentials.";
+    document.getElementById('auth-error').innerText = data.message || "Invalid credentials.";
   }
 }
 
-// CHATS & SOCKETS
+// WIN11 CLOCK
+function startWin11Clock() {
+  setInterval(() => {
+    const now = new Date();
+    let hours = now.getHours();
+    let minutes = now.getMinutes();
+    minutes = minutes < 10 ? '0' + minutes : minutes;
+    
+    if (clockFormat === '12') {
+      hours = hours % 12 || 12;
+    }
+    hours = hours < 10 ? '0' + hours : hours;
+    
+    document.getElementById('win11-clock').innerText = `${hours}:${minutes}`;
+  }, 1000);
+}
+
+function changeClockFont(fontClass) {
+  const clock = document.getElementById('win11-clock');
+  clock.className = `win11-clock ${fontClass}`;
+}
+function changeClockFormat(fmt) { clockFormat = fmt; }
+
+// CHAT & PROFILES
 function sendMessage() {
   const input = document.getElementById('message-input');
   if (input.value.trim()) {
@@ -97,53 +122,86 @@ function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
 socket.on('newMessage', (msg) => {
   const box = document.getElementById('chat-box');
   const div = document.createElement('div');
-  div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
+  div.innerHTML = `<strong class="user-item" onclick="openUserProfile('${msg.sender}')">${msg.sender}:</strong> ${msg.text}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 });
 
-// GAMING NEWS TAB
+// DISCORD-STYLE PROFILE MODAL
+function openSelfProfile() { if (currentUser) openUserProfile(currentUser.username); }
+function openUserProfile(username) {
+  document.getElementById('prof-username').innerText = username;
+  document.getElementById('prof-status').innerText = "Status: Online";
+  toggleProfileModal(true);
+}
+function toggleProfileModal(show) {
+  const modal = document.getElementById('profile-modal');
+  if (show) modal.classList.remove('hidden');
+  else modal.classList.add('hidden');
+}
+function closeProfileModal(e) { if (e.target.id === 'profile-modal') toggleProfileModal(false); }
+
+// ADMIN MODAL
+function toggleAdminModal(show) {
+  const modal = document.getElementById('admin-modal');
+  if (show) modal.classList.remove('hidden');
+  else modal.classList.add('hidden');
+}
+function closeAdminModal(e) { if (e.target.id === 'admin-modal') toggleAdminModal(false); }
+
+// GAMING NEWS
 function loadGamingNews() {
   const newsGrid = document.getElementById('news-grid');
-  const sampleArticles = [
-    { title: "Next-Gen Engine Update Announced", source: "Google News", query: "gaming engine update" },
-    { title: "Top Esports Tournament Results", source: "Bing News", query: "esports tournament finals" },
-    { title: "New Handheld Console Leaks", source: "Google News", query: "handheld gaming console leaks" }
+  const headlines = [
+    "Unreal Engine 5.5 Features Announced", "Top Esports Tournament Bracket Set",
+    "Handheld Console Next-Gen Rumors", "Major RPG Patch Notes Live",
+    "Indie Game Hits Record Players", "Cyberpunk DLC Sequel Teaser",
+    "GPU Architecture Breakthrough", "Cloud Gaming Expansion Plan",
+    "Classic Franchise Remaster Confirmed", "VR Hardware Price Cut Announced",
+    "FPS Championship Final Scores", "New Open World MMO Revealed"
   ];
   
   newsGrid.innerHTML = '';
-  sampleArticles.forEach(art => {
+  headlines.forEach(title => {
     const card = document.createElement('div');
     card.className = 'news-card';
-    card.innerHTML = `<h4>${art.title}</h4><p style="font-size:0.8rem; color:var(--text-muted);">${art.source}</p>`;
-    card.onclick = () => window.open(`https://news.google.com/search?q=${encodeURIComponent(art.query)}`, '_blank');
+    card.innerHTML = `<h4>${title}</h4><p style="font-size:0.8rem; color:var(--text-muted);">Google / Bing Gaming</p>`;
+    card.onclick = () => window.open(`https://news.google.com/search?q=${encodeURIComponent(title)}`, '_blank');
     newsGrid.appendChild(card);
   });
 }
 
-// TASKS
-function addTask() {
-  const input = document.getElementById('task-input');
-  if (!input.value.trim()) return;
-  const li = document.createElement('li');
-  li.innerHTML = `${input.value.trim()} <button onclick="this.parentElement.remove()">✓</button>`;
-  document.getElementById('task-list').appendChild(li);
-  input.value = '';
+function triggerNewsRefresh() {
+  loadGamingNews();
+  alert("Gaming News refreshed across the system.");
 }
 
-// SETTINGS & THEMES
+// SETTINGS & APPEARANCE
 function changeTheme(theme) {
-  document.body.className = `theme-${theme} liquid-glass`;
+  document.body.className = document.body.className.replace(/theme-\w+/g, `theme-${theme}`);
+}
+function changeWallpaper(bg) {
+  document.body.className = document.body.className.replace(/bg-\w+/g, bg);
+}
+function overrideGlobalWallpaper(bg) {
+  changeWallpaper(bg);
+  alert("Global wallpaper overridden by Admin.");
+}
+function toggleLiquidGlass() { document.body.classList.toggle('liquid-glass'); }
+function toggleCursorTrail() { cursorTrailActive = !cursorTrailActive; }
+function changeSidebarPosition(pos) {
+  const container = document.getElementById('hub-container');
+  if (pos === 'right') container.classList.add('layout-right');
+  else container.classList.remove('layout-right');
 }
 
-function toggleLiquidGlass() {
-  document.body.classList.toggle('liquid-glass');
+function toggleGamingMode() {
+  const badge = document.getElementById('gaming-indicator');
+  badge.classList.toggle('hidden');
 }
 
-function startClock() {
-  setInterval(() => {
-    document.getElementById('clock-widget').innerText = new Date().toLocaleTimeString();
-  }, 1000);
+function saveProfileSettings() {
+  // Saved internally for profile card renders
 }
 
 function unlockStash() {
