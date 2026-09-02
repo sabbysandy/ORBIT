@@ -1,159 +1,155 @@
 const socket = io();
 let currentUser = null;
+let currentChannel = 'general';
+let searchEngine = 'google';
+
+// CURSOR TRAIL EFFECT
+document.addEventListener('mousemove', (e) => {
+  const particle = document.createElement('div');
+  particle.className = 'trail-particle';
+  particle.style.left = `${e.pageX}px`;
+  particle.style.top = `${e.pageY}px`;
+  document.body.appendChild(particle);
+  setTimeout(() => particle.remove(), 500);
+});
+
+// PING METER
+setInterval(() => {
+  const start = Date.now();
+  socket.emit('pingTest', () => {
+    const latency = Date.now() - start;
+    document.getElementById('ping-value').innerText = `${latency} ms`;
+  });
+}, 3000);
+
+// TAB SWITCHING
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-viewport').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  
+  const selectedTab = document.getElementById(`tab-${tabId}`);
+  if (selectedTab) selectedTab.classList.remove('hidden');
+  
+  if (tabId === 'news') loadGamingNews();
+}
+
+// SEARCH ENGINE
+function handleSearch(e) { if (e.key === 'Enter') executeSearch(); }
+function executeSearch() {
+  const query = encodeURIComponent(document.getElementById('global-search').value.trim());
+  if (!query) return;
+  const engine = document.getElementById('search-engine-select').value;
+  let url = `https://www.google.com/search?q=${query}`;
+  if (engine === 'bing') url = `https://www.bing.com/search?q=${query}`;
+  if (engine === 'duckduckgo') url = `https://duckduckgo.com/?q=${query}`;
+  window.open(url, '_blank');
+}
 
 // AUTHENTICATION
 async function register() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  const errorElement = document.getElementById('auth-error');
-
-  if (!username || !password) {
-    errorElement.innerText = "Please enter both username and password.";
-    return;
-  }
+  const err = document.getElementById('auth-error');
 
   const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
   });
-  
   const data = await res.json();
-  if (data.success) {
-    errorElement.style.color = "#4ade80";
-    errorElement.innerText = "Identity registered! You may now log in.";
-  } else {
-    errorElement.style.color = "#f87171";
-    errorElement.innerText = data.message || "Registration failed.";
-  }
+  err.innerText = data.message || (data.success ? "Registered! You may log in." : "Failed");
 }
 
 async function login() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  const errorElement = document.getElementById('auth-error');
+  const err = document.getElementById('auth-error');
 
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
   });
-
   const data = await res.json();
   if (data.success) {
     currentUser = data.user;
     document.getElementById('auth-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
     document.getElementById('user-display').innerText = currentUser.username;
-
-    if (currentUser.isAdmin) {
-      document.getElementById('admin-btn').classList.remove('hidden');
-      loadAdminUsers();
-    }
-
-    socket.emit('joinChannel', 'global');
+    if (currentUser.isAdmin) document.getElementById('admin-dashboard').classList.remove('hidden');
+    socket.emit('joinChannel', currentChannel);
+    startClock();
   } else {
-    errorElement.style.color = "#f87171";
-    errorElement.innerText = data.message || "Invalid credentials.";
+    err.innerText = data.message || "Invalid credentials.";
   }
 }
 
-// LIVE CHAT
+// CHATS & SOCKETS
 function sendMessage() {
   const input = document.getElementById('message-input');
-  if (input.value.trim() !== '') {
-    socket.emit('sendMessage', {
-      sender: currentUser.username,
-      channel: 'global',
-      text: input.value.trim()
-    });
+  if (input.value.trim()) {
+    socket.emit('sendMessage', { sender: currentUser.username, channel: currentChannel, text: input.value.trim() });
     input.value = '';
   }
 }
-
-function handleKeyPress(event) {
-  if (event.key === 'Enter') sendMessage();
-}
-
-socket.on('loadMessages', (messages) => {
-  const box = document.getElementById('chat-box');
-  box.innerHTML = '';
-  messages.forEach(msg => appendMessage(msg));
-});
+function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
 
 socket.on('newMessage', (msg) => {
-  appendMessage(msg);
-});
-
-socket.on('chatCleared', () => {
-  document.getElementById('chat-box').innerHTML = '';
-});
-
-function appendMessage(msg) {
   const box = document.getElementById('chat-box');
   const div = document.createElement('div');
-  div.className = 'chat-message';
-  div.innerHTML = `<span class="username">${msg.sender}:</span> ${msg.text}`;
+  div.innerHTML = `<strong>${msg.sender}:</strong> ${msg.text}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
+});
+
+// GAMING NEWS TAB
+function loadGamingNews() {
+  const newsGrid = document.getElementById('news-grid');
+  const sampleArticles = [
+    { title: "Next-Gen Engine Update Announced", source: "Google News", query: "gaming engine update" },
+    { title: "Top Esports Tournament Results", source: "Bing News", query: "esports tournament finals" },
+    { title: "New Handheld Console Leaks", source: "Google News", query: "handheld gaming console leaks" }
+  ];
+  
+  newsGrid.innerHTML = '';
+  sampleArticles.forEach(art => {
+    const card = document.createElement('div');
+    card.className = 'news-card';
+    card.innerHTML = `<h4>${art.title}</h4><p style="font-size:0.8rem; color:var(--text-muted);">${art.source}</p>`;
+    card.onclick = () => window.open(`https://news.google.com/search?q=${encodeURIComponent(art.query)}`, '_blank');
+    newsGrid.appendChild(card);
+  });
 }
 
-// TASK MANAGER MODULE
+// TASKS
 function addTask() {
   const input = document.getElementById('task-input');
-  const text = input.value.trim();
-  if (!text) return;
-
-  const list = document.getElementById('task-list');
+  if (!input.value.trim()) return;
   const li = document.createElement('li');
-  li.innerHTML = `
-    <span>${text}</span>
-    <button onclick="this.parentElement.remove()" class="btn-secondary" style="padding: 4px 8px; flex: none;">✓</button>
-  `;
-  list.appendChild(li);
+  li.innerHTML = `${input.value.trim()} <button onclick="this.parentElement.remove()">✓</button>`;
+  document.getElementById('task-list').appendChild(li);
   input.value = '';
 }
 
-// ADMIN DASHBOARD
-function toggleAdminPanel() {
-  document.getElementById('admin-panel').classList.toggle('hidden');
+// SETTINGS & THEMES
+function changeTheme(theme) {
+  document.body.className = `theme-${theme} liquid-glass`;
 }
 
-async function loadAdminUsers() {
-  const res = await fetch('/api/admin/users');
-  const users = await res.json();
-  const list = document.getElementById('user-list');
-  list.innerHTML = '';
-  users.forEach(u => {
-    const div = document.createElement('div');
-    div.className = 'user-row';
-    div.innerHTML = `
-      <span>${u.username} ${u.isBanned ? '<strong style="color: #f87171;">(Banned)</strong>' : ''}</span>
-      <button onclick="toggleBan('${u.username}')" class="${u.isBanned ? 'btn-outline' : 'btn-danger'}" style="flex: none; padding: 6px 12px;">
-        ${u.isBanned ? 'Unban' : 'Ban'}
-      </button>
-    `;
-    list.appendChild(div);
-  });
+function toggleLiquidGlass() {
+  document.body.classList.toggle('liquid-glass');
 }
 
-async function toggleBan(username) {
-  await fetch('/api/admin/toggle-ban', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username })
-  });
-  loadAdminUsers();
+function startClock() {
+  setInterval(() => {
+    document.getElementById('clock-widget').innerText = new Date().toLocaleTimeString();
+  }, 1000);
 }
 
-async function clearChat() {
-  await fetch('/api/admin/clear-chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channel: 'global' })
-  });
+function unlockStash() {
+  if (document.getElementById('stash-pass').value) {
+    document.getElementById('stash-content').classList.remove('hidden');
+  }
 }
 
-function logout() {
-  location.reload();
-}
+function logout() { location.reload(); }

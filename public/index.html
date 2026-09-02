@@ -6,64 +6,183 @@
   <title>ORBIT</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="theme-purple liquid-glass">
 
-  <!-- AUTH SCREEN -->
-  <div id="auth-screen" class="card">
-    <h1 class="glow-title">ORBIT</h1>
-    <p class="subtitle">Enter the Grid</p>
+  <div id="cursor-trail-container"></div>
+
+  <div id="auth-screen" class="auth-card">
+    <h1 class="hero-title">ORBIT</h1>
+    <p class="subtitle">Centralized Operating Hub</p>
     
-    <input type="text" id="username" placeholder="Username" autocomplete="off">
-    <input type="password" id="password" placeholder="Password">
-    
-    <div class="btn-group">
-      <button onclick="login()">Log In</button>
-      <button onclick="register()" class="btn-outline">Register</button>
+    <div class="auth-form">
+      <input type="text" id="username" placeholder="Username" autocomplete="off">
+      <input type="password" id="password" placeholder="Password">
+      
+      <div class="btn-group">
+        <button onclick="login()">Log In</button>
+        <button onclick="register()" class="btn-outline">Register</button>
+      </div>
+      <p id="auth-error" class="error-msg"></p>
     </div>
-    <p id="auth-error" class="error-msg"></p>
   </div>
 
-  <!-- MAIN APP SCREEN -->
   <div id="app-screen" class="hidden">
-    <header class="navbar">
-      <h2 class="glow-logo">ORBIT</h2>
-      <div class="user-info">
-        <span id="user-display"></span>
-        <button id="admin-btn" class="hidden btn-admin" onclick="toggleAdminPanel()">Admin Dashboard</button>
+    
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <span class="brand-logo" onclick="switchTab('home')">ORBIT</span>
+        <div class="search-box">
+          <input type="text" id="global-search" placeholder="Search the web..." onkeypress="handleSearch(event)">
+          <button onclick="executeSearch()" class="btn-icon">🔍</button>
+        </div>
+      </div>
+
+      <div class="top-bar-right">
+        <div class="ping-meter">
+          <span id="ping-dot" class="status-dot green"></span>
+          <span id="ping-value">0 ms</span>
+        </div>
+        <div class="user-badge">
+          <span id="user-display"></span>
+          <span id="lfg-badge" class="badge hidden">LFG</span>
+        </div>
+        <button id="admin-btn" class="hidden btn-admin" onclick="switchTab('settings')">Overwatch</button>
         <button onclick="logout()" class="btn-secondary">Logout</button>
       </div>
     </header>
 
-    <div class="app-layout">
-      <!-- LIVE CHAT PANEL -->
-      <section class="panel chat-panel">
-        <h3>Live Transmissions</h3>
-        <div id="chat-box"></div>
-        <div class="input-group">
-          <input type="text" id="message-input" placeholder="Broadcast a message..." onkeypress="handleKeyPress(event)">
-          <button onclick="sendMessage()">Send</button>
-        </div>
-      </section>
+    <div class="hub-container">
+      
+      <nav class="sidebar">
+        <button class="nav-btn active" onclick="switchTab('home')">🏠 Home</button>
+        <button class="nav-btn" onclick="switchTab('news')">📰 Gaming News</button>
+        <button class="nav-btn" onclick="switchTab('music')">🎵 Music</button>
+        <button class="nav-btn" onclick="switchTab('chats')">💬 Chats</button>
+        <button class="nav-btn" onclick="switchTab('tasks')">📋 Tasks & Calendar</button>
+        <button class="nav-btn" onclick="switchTab('vault')">🔒 File Vault</button>
+        <button class="nav-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+      </nav>
 
-      <!-- TASK MANAGER PANEL -->
-      <section class="panel task-panel">
-        <h3>Tasks & Directives</h3>
-        <div class="input-group">
-          <input type="text" id="task-input" placeholder="New task item...">
-          <button onclick="addTask()">Add</button>
-        </div>
-        <ul id="task-list"></ul>
-      </section>
+      <main class="content-area">
+        
+        <section id="tab-home" class="tab-viewport">
+          <div class="hero-welcome">
+            <h1 class="glitch-title">ORBIT</h1>
+            <p class="hero-status">System Operational // Node Active</p>
+            <div class="widget-grid">
+              <div class="widget-card">
+                <h4>System Time</h4>
+                <div id="clock-widget" class="widget-value">--:--:--</div>
+              </div>
+              <div class="widget-card">
+                <h4>Status Message</h4>
+                <input type="text" id="user-status-input" placeholder="Set status..." onchange="updateStatus(this.value)">
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <!-- ADMIN CONTROL PANEL -->
-      <section id="admin-panel" class="panel admin-panel hidden">
-        <h3 class="admin-title">Overwatch Control</h3>
-        <div class="admin-actions">
-          <button onclick="clearChat()" class="btn-danger">Purge Chat History</button>
-        </div>
-        <h4>Registered Identities</h4>
-        <div id="user-list"></div>
-      </section>
+        <section id="tab-news" class="tab-viewport hidden">
+          <h2>Latest Gaming News</h2>
+          <div id="news-grid" class="news-grid"></div>
+        </section>
+
+        <section id="tab-music" class="tab-viewport hidden">
+          <h2>Spotify Media Station</h2>
+          <div class="spotify-container">
+            <iframe src="https://open.spotify.com/embed/playlist/37i9dQZF1DXdLENR312A25?utm_source=generator&theme=0" width="100%" height="450" frameborder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+          </div>
+        </section>
+
+        <section id="tab-chats" class="tab-viewport hidden">
+          <div class="chat-layout">
+            <div class="chat-sidebar">
+              <h4>Channels</h4>
+              <button class="channel-btn active" onclick="switchChannel('general')"># general</button>
+              <button class="channel-btn" onclick="switchChannel('lfg-gaming')"># lfg-gaming</button>
+              <button class="channel-btn" onclick="switchChannel('dev')"># dev</button>
+              <h4 style="margin-top: 15px;">Active Roster</h4>
+              <div id="user-roster"></div>
+            </div>
+            <div class="chat-main">
+              <div id="chat-box"></div>
+              <div class="input-group">
+                <input type="text" id="message-input" placeholder="Broadcast transmission..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-tasks" class="tab-viewport hidden">
+          <h2>Directives & Task Board</h2>
+          <div class="task-controls">
+            <input type="text" id="task-input" placeholder="New directive item...">
+            <select id="task-priority">
+              <option value="low">Low Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="high">High Priority</option>
+            </select>
+            <button onclick="addTask()">Add Task</button>
+          </div>
+          <ul id="task-list"></ul>
+        </section>
+
+        <section id="tab-vault" class="tab-viewport hidden">
+          <h2>File Vault & Private Stash</h2>
+          <div class="vault-grid">
+            <div class="vault-card">
+              <h3>Drop Zone</h3>
+              <p>Drag files here to store temporary media snippets.</p>
+              <input type="file" id="file-upload" style="margin-top: 10px;">
+            </div>
+            <div class="vault-card">
+              <h3>Private Stash</h3>
+              <div id="stash-lock">
+                <input type="password" id="stash-pass" placeholder="Passcode">
+                <button onclick="unlockStash()">Unlock</button>
+              </div>
+              <div id="stash-content" class="hidden">
+                <p>Private encrypted note storage unlocked.</p>
+                <textarea id="private-notes" placeholder="Write secure notes..."></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-settings" class="tab-viewport hidden">
+          <h2>System Preferences</h2>
+          <div class="settings-group">
+            <label>Theme Accent Color</label>
+            <select id="theme-select" onchange="changeTheme(this.value)">
+              <option value="purple">Magenta / Purple</option>
+              <option value="blue">Cyan / Blue</option>
+              <option value="green">Lime / Matrix Green</option>
+              <option value="red">Coral / Neon Red</option>
+            </select>
+          </div>
+          <div class="settings-group">
+            <label>Visual Style</label>
+            <button onclick="toggleLiquidGlass()">Toggle Liquid Glass Effect</button>
+          </div>
+          <div class="settings-group">
+            <label>Default Search Engine</label>
+            <select id="search-engine-select">
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+            </select>
+          </div>
+
+          <div id="admin-dashboard" class="admin-section hidden">
+            <h3 class="admin-title">Overwatch Control Panel</h3>
+            <button onclick="clearChat()" class="btn-danger">Purge Chat History</button>
+            <h4 style="margin-top: 15px;">Registered Users</h4>
+            <div id="admin-user-list"></div>
+          </div>
+        </section>
+
+      </main>
     </div>
   </div>
 
