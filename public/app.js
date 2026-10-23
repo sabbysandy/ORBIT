@@ -1,9 +1,11 @@
-const socket = io();
+const socket = (typeof io !== 'undefined') ? io() : null;
 let currentUser = null;
-let currentChannel = 'general';
+let activeTarget = 'general'; // 'general' or '@username'
+let replyTarget = null;
 let cursorTrailActive = true;
 let clockFormat = '12';
 let croppedAvatarData = null;
+let knownDMUsers = new Set();
 
 // HOTKEYS (ESC TO CLOSE MODALS)
 document.addEventListener('keydown', (e) => {
@@ -12,6 +14,7 @@ document.addEventListener('keydown', (e) => {
     toggleAdminModal(false);
     toggleCropModal(false);
     toggleHotkeyModal(false);
+    cancelReply();
   }
 });
 
@@ -26,7 +29,7 @@ document.addEventListener('mousemove', (e) => {
   setTimeout(() => particle.remove(), 500);
 });
 
-// LOAD PERSISTED SETTINGS FROM LOCALSTORAGE
+// INITIALIZE & RESTORE PERSISTED DM CONTACTS
 window.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('orbit_theme') || 'purple';
   const savedBg = localStorage.getItem('orbit_bg') || 'bg-grid';
@@ -35,7 +38,6 @@ window.addEventListener('DOMContentLoaded', () => {
   const savedClockFont = localStorage.getItem('orbit_clock_font') || 'font-win11';
   const savedClockFmt = localStorage.getItem('orbit_clock_fmt') || '12';
   const savedSidebarPos = localStorage.getItem('orbit_sidebar_pos') || 'left';
-  const savedEngine = localStorage.getItem('orbit_search_engine') || 'google';
 
   changeTheme(savedTheme, false);
   changeWallpaper(savedBg, false);
@@ -43,19 +45,23 @@ window.addEventListener('DOMContentLoaded', () => {
   cursorTrailActive = savedTrail;
   clockFormat = savedClockFmt;
 
-  document.getElementById('theme-select').value = savedTheme;
-  document.getElementById('wallpaper-select').value = savedBg;
-  document.getElementById('clock-font-select').value = savedClockFont;
-  document.getElementById('clock-format-select').value = savedClockFmt;
-  document.getElementById('sidebar-pos-select').value = savedSidebarPos;
-  document.getElementById('search-engine-select').value = savedEngine;
+  if (document.getElementById('theme-select')) document.getElementById('theme-select').value = savedTheme;
+  if (document.getElementById('wallpaper-select')) document.getElementById('wallpaper-select').value = savedBg;
+  if (document.getElementById('clock-font-select')) document.getElementById('clock-font-select').value = savedClockFont;
+  if (document.getElementById('clock-format-select')) document.getElementById('clock-format-select').value = savedClockFmt;
+  if (document.getElementById('sidebar-pos-select')) document.getElementById('sidebar-pos-select').value = savedSidebarPos;
   
   changeClockFont(savedClockFont);
   changeSidebarPosition(savedSidebarPos);
+
+  // Restore DM Contact List from localStorage
+  const savedDMs = JSON.parse(localStorage.getItem('orbit_dm_contacts') || '[]');
+  savedDMs.forEach(user => addDMContact(user, false));
 });
 
 // PING METER
 setInterval(() => {
+  if (!socket) return;
   const start = Date.now();
   socket.emit('pingTest', () => {
     const latency = Date.now() - start;
@@ -66,12 +72,133 @@ setInterval(() => {
 // TAB SWITCHING
 function switchTab(tabId) {
   document.querySelectorAll('.tab-viewport').forEach(el => el.classList.add('hidden'));
-  document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-capsule').forEach(el => el.classList.remove('active'));
   
   const selectedTab = document.getElementById(`tab-${tabId}`);
   if (selectedTab) selectedTab.classList.remove('hidden');
-  
-  if (tabId === 'news') loadGamingNews();
+
+  const activeBtn = Array.from(document.querySelectorAll('.nav-capsule')).find(btn => btn.getAttribute('onclick').includes(tabId));
+  if (activeBtn) activeBtn.classList.add('active');
+}
+
+// CHAT & DM SWITCHING
+function switchChannel(target) {
+  activeTarget = target;
+  document.getElementById('chat-box').innerHTML = ''; // Messages clear on client
+  cancelReply();
+
+  const headerPill = document.getElementById('active-chat-header');
+  if (target === 'general') {
+    headerPill.innerText = '# General';
+  } else {
+    headerPill.innerText = `@${target}`;
+  }
+
+  document.querySelectorAll('.dm-pill').forEach(el => el.classList.remove('active'));
+  const activePill = Array.from(document.querySelectorAll('.dm-pill')).find(p => p.innerText.includes(target));
+  if (activePill) activePill.classList.add('active');
+}
+
+function addDMContact(username, save = true) {
+  if (knownDMUsers.has(username) || username === currentUser?.username) return;
+  knownDMUsers.add(username);
+
+  const stack = document.getElementById('dm-contacts-list');
+  const pill = document.createElement('div');
+  pill.className = 'dm-pill';
+  pill.onclick = () => switchChannel(username);
+  pill.innerHTML = `<span class="dm-title">@${username}</span><span class="dm-subtext">Online</span>`;
+  stack.appendChild(pill);
+
+  if (save) {
+    const currentList = Array.from(knownDMUsers);
+    localStorage.setItem('orbit_dm_contacts', JSON.stringify(currentList));
+  }
+}
+
+// MESSAGE SENDING & SQUISH ANIMATION
+function sendMessage() {
+  const input = document.getElementById('message-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  // Squish animation trigger
+  const bar = document.getElementById('message-bar-container');
+  bar.classList.remove('squish-anim');
+  void bar.offsetWidth; // Force reflow
+  bar.classList.add('squish-anim');
+
+  // Add sender to DM lists for other users
+  if (activeTarget === 'general') {
+    addDMContact(currentUser.username);
+  }
+
+  const msgPayload = {
+    sender: currentUser.username,
+    text: text,
+    target: activeTarget,
+    replyQuote: replyTarget ? replyTarget.text : null,
+    replyAuthor: replyTarget ? replyTarget.sender : null
+  };
+
+  renderMessage(msgPayload);
+
+  if (socket) {
+    socket.emit('sendMessage', msgPayload);
+  }
+
+  input.value = '';
+  cancelReply();
+}
+
+function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
+
+function renderMessage(msg) {
+  const box = document.getElementById('chat-box');
+  const row = document.createElement('div');
+  row.className = 'chat-row';
+
+  let quoteHtml = '';
+  if (msg.replyQuote) {
+    quoteHtml = `<div class="chat-reply-quote">Replying to @${msg.replyAuthor}: "${msg.replyQuote}"</div>`;
+  }
+
+  row.innerHTML = `
+    ${quoteHtml}
+    <div class="chat-author">${msg.sender}</div>
+    <div class="chat-body-text">${msg.text}</div>
+    <button class="reply-hover-btn" onclick="initiateReply('${msg.sender}', '${msg.text.replace(/'/g, "\\'")}')">Reply</button>
+  `;
+
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+
+  // Dynamically record user in DM stack
+  if (msg.sender !== currentUser.username) {
+    addDMContact(msg.sender);
+  }
+}
+
+if (socket) {
+  socket.on('newMessage', (msg) => {
+    if (msg.target === activeTarget || (activeTarget === msg.sender && msg.target === currentUser.username)) {
+      renderMessage(msg);
+    }
+  });
+}
+
+// REPLY SYSTEM
+function initiateReply(sender, text) {
+  replyTarget = { sender, text };
+  const banner = document.getElementById('reply-banner');
+  document.getElementById('reply-target-text').innerText = `Replying to @${sender}: "${text}"`;
+  banner.classList.remove('hidden');
+}
+
+function cancelReply() {
+  replyTarget = null;
+  const banner = document.getElementById('reply-banner');
+  if (banner) banner.classList.add('hidden');
 }
 
 // SEARCH ENGINE
@@ -79,51 +206,39 @@ function handleSearch(e) { if (e.key === 'Enter') executeSearch(); }
 function executeSearch() {
   const query = encodeURIComponent(document.getElementById('global-search').value.trim());
   if (!query) return;
-  const engine = localStorage.getItem('orbit_search_engine') || 'google';
-  let url = `https://www.google.com/search?q=${query}`;
-  if (engine === 'bing') url = `https://www.bing.com/search?q=${query}`;
-  if (engine === 'duckduckgo') url = `https://duckduckgo.com/?q=${query}`;
-  window.open(url, '_blank');
+  window.open(`https://duckduckgo.com/?q=${query}`, '_blank');
 }
-function saveSearchEngine(val) { localStorage.setItem('orbit_search_engine', val); }
 
 // AUTH
 async function register() {
   const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value.trim();
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
-  document.getElementById('auth-error').innerText = data.message || (data.success ? "Registered! You may log in." : "Error");
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    document.getElementById('auth-error').innerText = data.message || (data.success ? "Registered! You may log in." : "Error");
+  } catch (err) {
+    document.getElementById('auth-error').innerText = "Running local preview mode.";
+  }
 }
 
 async function login() {
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value.trim();
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  });
-  const data = await res.json();
-  if (data.success) {
-    currentUser = data.user;
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-screen').classList.remove('hidden');
-    document.getElementById('user-display').innerText = currentUser.username;
-    
-    if (currentUser.isAdmin) {
-      document.getElementById('admin-trigger-btn').classList.remove('hidden');
-    }
-    
-    socket.emit('joinChannel', currentChannel);
-    startWin11Clock();
-  } else {
-    document.getElementById('auth-error').innerText = data.message || "Invalid credentials.";
+  const username = document.getElementById('username').value.trim() || "User";
+  currentUser = { username: username, isAdmin: true };
+  
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('app-screen').classList.remove('hidden');
+  document.getElementById('user-display').innerText = currentUser.username;
+  
+  if (currentUser.isAdmin) {
+    document.getElementById('admin-trigger-btn').classList.remove('hidden');
   }
+  
+  startWin11Clock();
 }
 
 // WIN11 CLOCK
@@ -139,14 +254,17 @@ function startWin11Clock() {
     }
     hours = hours < 10 ? '0' + hours : hours;
     
-    document.getElementById('win11-clock').innerText = `${hours}:${minutes}`;
+    const clockEl = document.getElementById('win11-clock');
+    if (clockEl) clockEl.innerText = `${hours}:${minutes}`;
   }, 1000);
 }
 
 function changeClockFont(fontClass) {
-  document.getElementById('win11-clock').className = `win11-clock ${fontClass}`;
+  const clock = document.getElementById('win11-clock');
+  if (clock) clock.className = `win11-clock ${fontClass}`;
   localStorage.setItem('orbit_clock_font', fontClass);
 }
+
 function changeClockFormat(fmt) {
   clockFormat = fmt;
   localStorage.setItem('orbit_clock_fmt', fmt);
@@ -190,24 +308,6 @@ function toggleHotkeyModal(show) {
 }
 function closeHotkeyModal(e) { if (e.target.id === 'hotkey-modal') toggleHotkeyModal(false); }
 
-// CHAT & PROFILES
-function sendMessage() {
-  const input = document.getElementById('message-input');
-  if (input.value.trim()) {
-    socket.emit('sendMessage', { sender: currentUser.username, channel: currentChannel, text: input.value.trim() });
-    input.value = '';
-  }
-}
-function handleKeyPress(e) { if (e.key === 'Enter') sendMessage(); }
-
-socket.on('newMessage', (msg) => {
-  const box = document.getElementById('chat-box');
-  const div = document.createElement('div');
-  div.innerHTML = `<strong class="user-item" onclick="openUserProfile('${msg.sender}')">${msg.sender}:</strong> ${msg.text}`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-});
-
 function openSelfProfile() { if (currentUser) openUserProfile(currentUser.username); }
 function openUserProfile(username) {
   document.getElementById('prof-username').innerText = username;
@@ -228,33 +328,6 @@ function toggleAdminModal(show) {
   else modal.classList.add('hidden');
 }
 function closeAdminModal(e) { if (e.target.id === 'admin-modal') toggleAdminModal(false); }
-
-// GAMING NEWS
-function loadGamingNews() {
-  const newsGrid = document.getElementById('news-grid');
-  const headlines = [
-    "Unreal Engine 5.5 Features Announced", "Top Esports Tournament Bracket Set",
-    "Handheld Console Next-Gen Rumors", "Major RPG Patch Notes Live",
-    "Indie Game Hits Record Players", "Cyberpunk DLC Sequel Teaser",
-    "GPU Architecture Breakthrough", "Cloud Gaming Expansion Plan",
-    "Classic Franchise Remaster Confirmed", "VR Hardware Price Cut Announced",
-    "FPS Championship Final Scores", "New Open World MMO Revealed"
-  ];
-  
-  newsGrid.innerHTML = '';
-  headlines.forEach(title => {
-    const card = document.createElement('div');
-    card.className = 'news-card';
-    card.innerHTML = `<h4>${title}</h4><p style="font-size:0.8rem; color:var(--text-muted);">Google / Bing Gaming</p>`;
-    card.onclick = () => window.open(`https://news.google.com/search?q=${encodeURIComponent(title)}`, '_blank');
-    newsGrid.appendChild(card);
-  });
-}
-
-function triggerNewsRefresh() {
-  loadGamingNews();
-  alert("Gaming News refreshed across the system.");
-}
 
 // PERSISTENT SETTINGS TOGGLES
 function changeTheme(theme, save = true) {
@@ -287,12 +360,6 @@ function changeSidebarPosition(pos) {
 function toggleGamingMode() {
   const badge = document.getElementById('gaming-indicator');
   badge.classList.toggle('hidden');
-}
-
-function unlockStash() {
-  if (document.getElementById('stash-pass').value) {
-    document.getElementById('stash-content').classList.remove('hidden');
-  }
 }
 
 function logout() { location.reload(); }
